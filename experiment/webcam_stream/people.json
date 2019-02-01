@@ -1,0 +1,30 @@
+[
+    {
+        "name": "William",
+        "path": "william.jpg"
+    },
+    {
+        "name": "Philip",
+        "path": "philip.jpg"
+    },
+    {
+        "name": "Rebecka",
+        "path": "rebecka.jpg"
+    },
+    {
+        "name": "Obama",
+        "path": "obama.jpg"
+    },
+    {
+        "name": "Edvin",
+        "path": "edvin.jpg"
+    },
+    {
+        "name": "Biden",
+        "path": "biden.jpg"
+    },
+    {
+        "name": "Hampus",
+        "path": "hampus.jpg"
+    }
+]
