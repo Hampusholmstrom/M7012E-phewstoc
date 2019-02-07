@@ -6,10 +6,7 @@ from time import sleep
 
 def _cec_send(device, command):
     proc = run(["cec-client", "-s", "-d", str(device)], stdout=PIPE,
-               input=command, encoding="ascii")
-
-    if proc.returncode != 0:
-        raise Exception("unexpected return code: %s, output: %s" % (proc.returncode, proc.stdout))
+               input=command, universal_newlines=True, check=True)
 
 
 def cec_off(device):
