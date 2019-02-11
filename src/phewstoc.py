@@ -6,6 +6,8 @@ import json
 import multiprocessing as mp
 import signal
 
+import cec
+
 import cv2
 import face_recognition
 
@@ -74,6 +76,7 @@ def find_faces(people, camera_index, cores):
                     compare_face,
                     [(known_face_names, known_face_encodings, e) for e in face_encodings]):
                 print("Found: %s" % name)
+                cec.on(1)
 
         print("Capture #%d doesn't exist or was unexpectedly closed" % camera_index)
 

@@ -1,0 +1,30 @@
+[
+    {
+        "name": "William",
+        "path": "../experiment/webcam_stream/william.jpg"
+    },
+    {
+        "name": "Philip",
+        "path": "../experiment/webcam_stream/philip.jpg"
+    },
+    {
+        "name": "Rebecka",
+        "path": "../experiment/webcam_stream/rebecka.jpg"
+    },
+    {
+        "name": "Obama",
+        "path": "../experiment/webcam_stream/obama.jpg"
+    },
+    {
+        "name": "Edvin",
+        "path": "../experiment/webcam_stream/edvin.jpg"
+    },
+    {
+        "name": "Biden",
+        "path": "../experiment/webcam_stream/biden.jpg"
+    },
+    {
+        "name": "Hampus",
+        "path": "../experiment/webcam_stream/hampus.jpg"
+    }
+]
