@@ -43,8 +43,7 @@ func main() {
 	http.HandleFunc("/register/success", success)
 	http.HandleFunc("/subscribe/sleep/", fitbitData)
 
-	//err := http.ListenAndServeTLS(":9090", "server.crt", "server.key", nil)
-	err := http.ListenAndServe("443", nil)
+	err := http.ListenAndServeTLS(":443", "/etc/letsencrypt/live/phewstoc.sladic.se/fullchain.pem", "/etc/letsencrypt/live/phewstoc.sladic.se/privkey.pem", nil)
 	if err != nil {
 		log.Fatal("listenAndServe: ", err)
 	}
