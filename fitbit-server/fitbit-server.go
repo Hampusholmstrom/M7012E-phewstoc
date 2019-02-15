@@ -40,7 +40,7 @@ func main() {
 
 	http.HandleFunc("/", answer)
 	http.HandleFunc("/register/", register)
-	http.HandleFunc("/register/success", success)
+	http.HandleFunc("/success/", success)
 	http.HandleFunc("/subscribe/sleep/", fitbitData)
 
 	err := http.ListenAndServeTLS(":443", "/etc/letsencrypt/live/phewstoc.sladic.se/fullchain.pem", "/etc/letsencrypt/live/phewstoc.sladic.se/privkey.pem", nil)
