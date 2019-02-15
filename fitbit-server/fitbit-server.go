@@ -22,8 +22,8 @@ func answer(w http.ResponseWriter, r *http.Request) {
 }
 
 func register(w http.ResponseWriter, r *http.Request) {
-	var registerUrl = "https://www.fitbit.com/oauth2/authorize?response_type=code&client_id=" + params.client_id +
-		"&redirect_uri=phewstoc.sladic.se/success/&scope=sleep"
+	var registerUrl = "https://www.fitbit.com/oauth2/authorize?response_type=code&client_id="
+	+ params.client_id + "&scope=sleep"
 	http.Redirect(w, r, registerUrl, http.StatusSeeOther)
 }
 
@@ -44,7 +44,8 @@ func main() {
 	http.HandleFunc("/register/success", success)
 	http.HandleFunc("/subscribe/sleep/", fitbitData)
 
-	err := http.ListenAndServe(":9090", nil)
+	//err := http.ListenAndServeTLS(":9090", "server.crt", "server.key", nil)
+	err := http.listenAndServe("9090")
 	if err != nil {
 		log.Fatal("listenAndServe: ", err)
 	}
