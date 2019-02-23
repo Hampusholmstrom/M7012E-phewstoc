@@ -5,6 +5,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+    b64 "encoding/base64"
+
+    "github.com/satori/go.uuid"
 )
 
 var params authParams
@@ -26,9 +29,26 @@ func register(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, registerUrl, http.StatusSeeOther)
 }
 
+func concAuth(clientId string, clientSecret string) string {
+    idAndSecret := clientId + ":" + client
+    return b64.StdEncoding.EncodeToString([]byte(idAndSecret))
+}
+
 func success(w http.ResponseWriter, r *http.Request)  {
 	fmt.Print(r)
 	fmt.Fprintf(w, "Received! :)")
+
+    keys, err := r.URL.Query()['code']
+    if err != nil {
+        log.Println("Url param 'code' is missing")
+    }
+
+    
+
+    authURL := "https://api.fitbit.com/oauth2/token"
+    req, err := http.NewRequest("POST", authURL, )
+    req.Header.Set("Authorization", "Basic " + concAuth(clientId, clientSecret))
+    req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 }
 
 func fitbitData(w http.ResponseWriter, r *http.Request) {
