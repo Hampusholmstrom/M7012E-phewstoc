@@ -14,32 +14,7 @@ import cec
 import cv2
 import face_recognition
 
-TV_TIMEOUT_SECONDS = 10  # 600
-
-
-def encode_face(path):
-    print("Encoding image: %s" % path)
-    image = face_recognition.load_image_file(path)
-
-    face_encodings = face_recognition.face_encodings(image)
-    if len(face_encodings) == 0:
-        raise Exception("no face found in %s" % path)
-
-    print("Successfully encoded: %s" % path)
-    return face_encodings[0]  # Use first face that was found.
-
-
-def compare_face(known_face_names, known_face_encodings, face_encoding):
-    # See if the face is a match for the known face(s)
-    matches = face_recognition.compare_faces(known_face_encodings, face_encoding)
-    name = "Unknown"
-
-    # If a match was found in known_face_encodings, just use the first one.
-    if True in matches:
-        first_match_index = matches.index(True)
-        name = known_face_names[first_match_index]
-
-    return name
+TV_TIMEOUT_SECONDS = 600
 
 
 class TV:
@@ -77,56 +52,92 @@ class TV:
         self.scheduler.enter(TV_TIMEOUT_SECONDS, 1, self._off)
 
 
-def find_faces(people, camera_index, cores):
-    # The thread pool is used to run multiple encoders and recognition processes in parallel.
-    # The init worker function (see lambda) forces the workers to ignore SIGINT, letting the main thread handling the
-    # exit.
-    thread_pool = mp.Pool(cores if cores != -1 else None, lambda: signal.signal(signal.SIGINT, signal.SIG_IGN))
+class Recognizer:
+    def __init__(self, people, camera_index, tv_device_index, cores):
+        self.people = people
+        self.camera_index = camera_index
+        self.cores = cores
+        self.tv_device_index = tv_device_index
 
-    tv = TV(1)
+    @staticmethod
+    def _encode_face(path):
+        print("Encoding image: %s" % path)
+        image = face_recognition.load_image_file(path)
 
-    try:
-        # Spawn one thread for each face encoder.
-        encode_thread = thread_pool.map_async(encode_face, [(p['path']) for p in people])
+        face_encodings = face_recognition.face_encodings(image)
+        if len(face_encodings) == 0:
+            raise Exception("no face found in %s" % path)
 
-        # While encoding the faces, open the video capture (webcam).
-        video_capture = cv2.VideoCapture(camera_index)
-        atexit.register(video_capture.release)  # Clean exit by releasing webcam on interrupt.
+        print("Successfully encoded: %s" % path)
+        return face_encodings[0]  # Use first face that was found.
 
-        known_face_names = [p["name"] for p in people]
-        known_face_encodings = encode_thread.get(timeout=120)  # Collect result from threads, w/ timeout 2m.
+    @staticmethod
+    def _compare_face(known_face_names, known_face_encodings, face_encoding):
+        # See if the face is a match for the known face(s)
+        matches = face_recognition.compare_faces(known_face_encodings, face_encoding)
+        name = "Unknown"
 
-        face_locations = []
-        face_encodings = []
-        while video_capture.isOpened():
-            # Grab a single frame of video
-            ret, frame = video_capture.read()
+        # If a match was found in known_face_encodings, just use the first one.
+        if True in matches:
+            first_match_index = matches.index(True)
+            name = known_face_names[first_match_index]
 
-            # Exit if empty frame (closed capture?).
-            if frame is None:
-                break
+        return name
 
-            # Convert the image from BGR color (which OpenCV uses) to RGB color (which face_recognition uses).
-            rgb_frame = frame[:, :, ::-1]
+    def run(self):
+        cores = self.cores
+        camera_index = self.camera_index
+        people = self.people
 
-            # Find all the faces and face encodings in the current frame of video.
-            face_locations = face_recognition.face_locations(rgb_frame)
-            face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
+        # The thread pool is used to run multiple encoders and recognition processes in parallel.
+        # The init worker function (see lambda) forces the workers to ignore SIGINT, letting the main thread handling
+        # the exit.
+        thread_pool = mp.Pool(cores if cores != -1 else None, lambda: signal.signal(signal.SIGINT, signal.SIG_IGN))
 
-            # Compare faces and display the results.
-            for name in thread_pool.starmap(
-                    compare_face,
-                    [(known_face_names, known_face_encodings, e) for e in face_encodings]):
+        # Start CEC TV controller for defined device.
+        tv = TV(self.tv_device_index)
 
-                print("Found: %s" % name)
+        try:
+            # Spawn one thread for each face encoder.
+            encode_thread = thread_pool.map_async(Recognizer._encode_face, [(p['path']) for p in people])
 
-                tv.on()
+            # While encoding the faces, open the video capture (webcam).
+            video_capture = cv2.VideoCapture(camera_index)
+            atexit.register(video_capture.release)  # Clean exit by releasing webcam on interrupt.
 
-        print("Capture #%d doesn't exist or was unexpectedly closed" % camera_index)
+            known_face_names = [p["name"] for p in people]
+            known_face_encodings = encode_thread.get(timeout=120)  # Collect result from threads, w/ timeout 2m.
 
-    except KeyboardInterrupt:
-        thread_pool.terminate()
-        thread_pool.join()
+            face_locations = []
+            face_encodings = []
+            while video_capture.isOpened():
+                # Grab a single frame of video
+                ret, frame = video_capture.read()
+
+                # Exit if empty frame (closed capture?).
+                if frame is None:
+                    break
+
+                # Convert the image from BGR color (which OpenCV uses) to RGB color (which face_recognition uses).
+                rgb_frame = frame[:, :, ::-1]
+
+                # Find all the faces and face encodings in the current frame of video.
+                face_locations = face_recognition.face_locations(rgb_frame)
+                face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
+
+                # Compare faces and display the results.
+                for name in thread_pool.starmap(
+                        Recognizer._compare_face,
+                        [(known_face_names, known_face_encodings, e) for e in face_encodings]):
+
+                    print("Found: %s" % name)
+                    tv.on()
+
+            print("Capture #%d doesn't exist or was unexpectedly closed" % camera_index)
+
+        except KeyboardInterrupt:
+            thread_pool.terminate()
+            thread_pool.join()
 
 
 def main():
@@ -137,6 +148,8 @@ def main():
                         help="Number of cores to utilize, -1 will use all available cores")
     parser.add_argument("-p", "--people", type=str, default="people.json",
                         help="JSON encoded file with names and their corresponding image file path")
+    parser.add_argument("-t", "--tv", type=int, default=1, metavar="N",
+                        help="TV device index (CEC ID)")
 
     args = parser.parse_args()
 
@@ -147,7 +160,7 @@ def main():
         print("People data file: '%s' does not exit" % args.people)
         return
 
-    find_faces(people, args.camera, args.cores)
+    Recognizer(people, args.camera, args.cores, args.tv).run()
 
 
 if __name__ == "__main__":
