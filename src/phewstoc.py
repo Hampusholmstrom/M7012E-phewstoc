@@ -134,7 +134,7 @@ class Recognizer:
             atexit.register(video_capture.release)  # Clean exit by releasing webcam on interrupt.
 
             known_face_names = [p["name"] for p in people]
-            known_face_encodings = encode_thread.get(timeout=120)  # Collect result from threads, w/ timeout 2m.
+            known_face_encodings = encode_thread.get(timeout=300)  # Collect result from threads, w/ timeout 5m.
 
             face_locations = []
             face_encodings = []
