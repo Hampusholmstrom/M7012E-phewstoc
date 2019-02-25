@@ -2,8 +2,10 @@
 
 import argparse
 import atexit
+import hashlib
 import json
 import multiprocessing as mp
+import pathlib
 import sched
 import signal
 import time
@@ -13,6 +15,7 @@ from threading import Thread
 import cec
 import cv2
 import face_recognition
+import numpy as np
 
 TV_TIMEOUT_SECONDS = 600
 
@@ -61,15 +64,40 @@ class Recognizer:
 
     @staticmethod
     def _encode_face(path):
-        print("Encoding image: %s" % path)
-        image = face_recognition.load_image_file(path)
+        hasher = hashlib.md5()
+        blocksize = 65536
 
-        face_encodings = face_recognition.face_encodings(image)
-        if len(face_encodings) == 0:
-            raise Exception("no face found in %s" % path)
+        # Compute image hash.
+        with open(path, 'rb') as f:
+            b = f.read(blocksize)
+            while len(b) > 0:
+                hasher.update(b)
+                b = f.read(blocksize)
+        image_hash = hasher.hexdigest()
 
-        print("Successfully encoded: %s" % path)
-        return face_encodings[0]  # Use first face that was found.
+        image_cache = pathlib.Path(image_hash + '.npy')
+
+        # Check if image encoding is cached on file system.
+        if image_cache.exists():
+            print("Loading image encoding at %s cache for file: %s" % (image_hash, path))
+            return np.load(image_cache)
+
+        # No cache found, encode image.
+        else:
+            print("Encoding image: %s" % path)
+            image = face_recognition.load_image_file(path)
+
+            face_encodings = face_recognition.face_encodings(image)
+            if len(face_encodings) == 0:
+                raise Exception("no face found in %s" % path)
+
+            print("Successfully encoded: %s" % path)
+            face_encoding = face_encodings[0]  # Use first face that was found.
+
+            # Save image encoding to file system for re-use.
+            np.save(image_hash, face_encoding)
+
+            return face_encoding
 
     @staticmethod
     def _compare_face(known_face_names, known_face_encodings, face_encoding):
