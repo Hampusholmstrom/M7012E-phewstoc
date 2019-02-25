@@ -1,12 +1,19 @@
 from subprocess import PIPE, run
 
 
+class CECError(Exception):
+    """
+    An error code was returned by the CEC command.
+    """
+    pass
+
+
 def _cec_send(device, command):
     proc = run(["cec-client", "-s", "-d", str(device)], stdout=PIPE,
                input=command, encoding="ascii")
 
     if proc.returncode != 0:
-        raise Exception("unexpected return code: %s, output: %s" % (proc.returncode, proc.stdout))
+        raise CECError("unexpected return code: %s, output: %s" % (proc.returncode, proc.stdout))
 
 
 def off(device):

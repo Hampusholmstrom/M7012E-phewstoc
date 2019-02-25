@@ -4,12 +4,17 @@ import argparse
 import atexit
 import json
 import multiprocessing as mp
+import sched
 import signal
+import time
+from collections import deque
+from threading import Thread
 
 import cec
-
 import cv2
 import face_recognition
+
+TV_TIMEOUT_SECONDS = 10  # 600
 
 
 def encode_face(path):
@@ -37,11 +42,48 @@ def compare_face(known_face_names, known_face_encodings, face_encoding):
     return name
 
 
+class TV:
+    def __init__(self, device, timeout=TV_TIMEOUT_SECONDS):
+        self.device = device
+        self.scheduler = sched.scheduler(time.time, time.sleep)
+
+        thread = Thread(target=self._run_scheduler)
+        thread.start()
+
+    def _run_scheduler(self):
+        while True:
+            self.scheduler.run()
+
+    def _off(self):
+        print("Turning off TV")
+
+        try:
+            cec.off(self.device)
+        except cec.CECError as e:
+            print("Failed to turn off TV with CEC: %s" % e)
+
+    def on(self):
+        print("Turning on TV")
+
+        try:
+            cec.on(self.device)
+        except cec.CECError as e:
+            print("Failed to turn on TV with CEC: %s" % e)
+
+        # Deque old turn off TV events.
+        deque(map(self.scheduler.cancel, self.scheduler.queue))
+
+        # Add new turn off TV event.
+        self.scheduler.enter(TV_TIMEOUT_SECONDS, 1, self._off)
+
+
 def find_faces(people, camera_index, cores):
     # The thread pool is used to run multiple encoders and recognition processes in parallel.
     # The init worker function (see lambda) forces the workers to ignore SIGINT, letting the main thread handling the
     # exit.
     thread_pool = mp.Pool(cores if cores != -1 else None, lambda: signal.signal(signal.SIGINT, signal.SIG_IGN))
+
+    tv = TV(1)
 
     try:
         # Spawn one thread for each face encoder.
@@ -75,8 +117,10 @@ def find_faces(people, camera_index, cores):
             for name in thread_pool.starmap(
                     compare_face,
                     [(known_face_names, known_face_encodings, e) for e in face_encodings]):
+
                 print("Found: %s" % name)
-                cec.on(1)
+
+                tv.on()
 
         print("Capture #%d doesn't exist or was unexpectedly closed" % camera_index)
 
