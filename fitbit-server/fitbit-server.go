@@ -14,6 +14,7 @@ var params authParams
 
 type authParams struct {
 	client_id string
+    client_secret string
 	response_type string
 	scope string
 	redirect_uri string
@@ -42,13 +43,16 @@ func success(w http.ResponseWriter, r *http.Request)  {
     if err != nil {
         log.Println("Url param 'code' is missing")
     }
+    fmt.Print(keys)
 
-    
 
     authURL := "https://api.fitbit.com/oauth2/token"
-    req, err := http.NewRequest("POST", authURL, )
+    req, err := http.NewRequest("POST", "application/x-www-form-urlencoded", authURL)
     req.Header.Set("Authorization", "Basic " + concAuth(clientId, clientSecret))
-    req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+    v := url.Values{}
+    v.Add("client_id", client_id)
+    v.Add("grant_type", "authorization_code")
+    v.Add("code", keys[0])
 }
 
 func fitbitData(w http.ResponseWriter, r *http.Request) {
