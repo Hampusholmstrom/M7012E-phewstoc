@@ -60,8 +60,9 @@ func success(w http.ResponseWriter, r *http.Request)  {
     }
     req.Header.Set("Authorization", "Basic " + concAuth(params.client_id, params.client_secret))
     req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-    resp, err := client.Do(r)
+    resp, err := client.Do(req)
     if err != nil {
+        fmt.Prntln(err)
         fmt.Println("some client Do err")
     }
     fmt.Println(resp.Status)
