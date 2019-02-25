@@ -135,13 +135,15 @@ class Recognizer:
         # See if the face is a match for the known face(s)
         matches = face_recognition.compare_faces(known_face_encodings, face_encoding)
         name = "Unknown"
+        authenticated = False
 
         # If a match was found in known_face_encodings, just use the first one.
         if True in matches:
             first_match_index = matches.index(True)
             name = known_face_names[first_match_index]
+            authenticated = True
 
-        return name
+        return (name, authenticated)
 
     def run(self):
         cores = self.cores
@@ -184,12 +186,13 @@ class Recognizer:
                 face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
 
                 # Compare faces and display the results.
-                for name in thread_pool.starmap(
+                for name, authenticated in thread_pool.starmap(
                         Recognizer._compare_face,
                         [(known_face_names, known_face_encodings, e) for e in face_encodings]):
 
                     print("Found: %s" % name)
-                    self.tv.on()
+                    if authenticated:
+                        self.tv.on()
 
             print("Capture #%d doesn't exist or was unexpectedly closed" % camera_index)
 
