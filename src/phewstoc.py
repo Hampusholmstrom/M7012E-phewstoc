@@ -10,9 +10,9 @@ import sched
 import signal
 import time
 from collections import deque
+from subprocess import PIPE, CalledProcessError, run
 from threading import Thread
 
-import cec
 import cv2
 import face_recognition
 import numpy as np
@@ -21,46 +21,77 @@ TV_TIMEOUT_SECONDS = 600
 
 
 class TV:
-    def __init__(self, device, timeout=TV_TIMEOUT_SECONDS):
+    def __init__(self, device, timeout=TV_TIMEOUT_SECONDS, aux_on_command="", aux_off_command=""):
         self.device = device
+        self.timeout = timeout
+
+        self.aux_off_command = aux_off_command
+        self.aux_on_command = aux_on_command
+
         self.scheduler = sched.scheduler(time.time, time.sleep)
 
         thread = Thread(target=self._run_scheduler)
         thread.start()
 
+    @staticmethod
+    def _run_aux_command(command):
+        proc = run(command.split(" "), check=True, stdout=PIPE)
+        if len(proc.stdout) > 0:
+            print("AUX command '%s' returned output: %s" % (command, proc.stdout.decode('utf-8')))
+
+    def _cec_send(self, command):
+        run(["cec-client", "-s", "-d", str(self.device)], stdout=PIPE,
+            input=command, universal_newlines=True, check=True)
+
     def _run_scheduler(self):
         while True:
             self.scheduler.run()
 
+    def _cec_off(self):
+        self._cec_send("standby 0")
+
+    def _cec_on(self):
+        self._cec_send("on 0")
+
     def _off(self):
         print("Turning off TV")
-
         try:
-            cec.off(self.device)
-        except cec.CECError as e:
+            self._cec_off()
+        except CalledProcessError as e:
             print("Failed to turn off TV with CEC: %s" % e)
+
+        if self.aux_off_command != "":
+            try:
+                self._run_aux_command(self.aux_off_command)
+            except CalledProcessError as e:
+                print("Failed to run auxiliary off command: %s" % e)
 
     def on(self):
         print("Turning on TV")
-
         try:
-            cec.on(self.device)
-        except cec.CECError as e:
-            print("Failed to turn on TV with CEC: %s" % e)
+            self._cec_on()
+        except CalledProcessError as e:
+            print("Failed to turn on TV: %s" % e)
+
+        if self.aux_on_command != "":
+            try:
+                self._run_aux_command(self.aux_on_command)
+            except CalledProcessError as e:
+                print("Failed to run auxiliary on command: %s" % e)
 
         # Deque old turn off TV events.
         deque(map(self.scheduler.cancel, self.scheduler.queue))
 
         # Add new turn off TV event.
-        self.scheduler.enter(TV_TIMEOUT_SECONDS, 1, self._off)
+        self.scheduler.enter(self.timeout, 1, self._off)
 
 
 class Recognizer:
-    def __init__(self, people, camera_index, tv_device_index, cores):
+    def __init__(self, people, camera_index, cores, tv,):
         self.people = people
         self.camera_index = camera_index
         self.cores = cores
-        self.tv_device_index = tv_device_index
+        self.tv = tv
 
     @staticmethod
     def _encode_face(path):
@@ -68,18 +99,18 @@ class Recognizer:
         blocksize = 65536
 
         # Compute image hash.
-        with open(path, 'rb') as f:
+        with open(path, "rb") as f:
             b = f.read(blocksize)
             while len(b) > 0:
                 hasher.update(b)
                 b = f.read(blocksize)
         image_hash = hasher.hexdigest()
 
-        image_cache = pathlib.Path(image_hash + '.npy')
+        image_cache = pathlib.Path(image_hash + ".npy")
 
         # Check if image encoding is cached on file system.
         if image_cache.exists():
-            print("Loading image encoding at %s cache for file: %s" % (image_hash, path))
+            print("Loading image encoding cache at %s for file: %s" % (image_cache.name, path))
             return np.load(image_cache)
 
         # No cache found, encode image.
@@ -122,12 +153,9 @@ class Recognizer:
         # the exit.
         thread_pool = mp.Pool(cores if cores != -1 else None, lambda: signal.signal(signal.SIGINT, signal.SIG_IGN))
 
-        # Start CEC TV controller for defined device.
-        tv = TV(self.tv_device_index)
-
         try:
             # Spawn one thread for each face encoder.
-            encode_thread = thread_pool.map_async(Recognizer._encode_face, [(p['path']) for p in people])
+            encode_thread = thread_pool.map_async(Recognizer._encode_face, [(p["path"]) for p in people])
 
             # While encoding the faces, open the video capture (webcam).
             video_capture = cv2.VideoCapture(camera_index)
@@ -138,6 +166,8 @@ class Recognizer:
 
             face_locations = []
             face_encodings = []
+
+            print("Analyzing video capture at index %d" % camera_index)
             while video_capture.isOpened():
                 # Grab a single frame of video
                 ret, frame = video_capture.read()
@@ -159,7 +189,7 @@ class Recognizer:
                         [(known_face_names, known_face_encodings, e) for e in face_encodings]):
 
                     print("Found: %s" % name)
-                    tv.on()
+                    self.tv.on()
 
             print("Capture #%d doesn't exist or was unexpectedly closed" % camera_index)
 
@@ -178,6 +208,10 @@ def main():
                         help="JSON encoded file with names and their corresponding image file path")
     parser.add_argument("-t", "--tv", type=int, default=1, metavar="N",
                         help="TV device index (CEC ID)")
+    parser.add_argument("-s", "--off-timeout", type=int, default=TV_TIMEOUT_SECONDS, metavar="T",
+                        help="Timeout to send off signal if no face was recognized.")
+    parser.add_argument("--aux-on-cmd", type=str, default="")
+    parser.add_argument("--aux-off-cmd", type=str, default="")
 
     args = parser.parse_args()
 
@@ -188,7 +222,8 @@ def main():
         print("People data file: '%s' does not exit" % args.people)
         return
 
-    Recognizer(people, args.camera, args.cores, args.tv).run()
+    tv = TV(args.tv, timeout=args.off_timeout, aux_on_command=args.aux_on_cmd, aux_off_command=args.aux_off_cmd)
+    Recognizer(people, args.camera, args.cores, tv).run()
 
 
 if __name__ == "__main__":
