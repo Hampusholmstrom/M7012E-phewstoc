@@ -20,6 +20,17 @@ import numpy as np
 TV_TIMEOUT_SECONDS = 600
 
 
+class KODI:
+    def __init__(self, people):
+        self.people = people
+
+    def login(self, name):
+        for person in self.people.item():
+            if person["name"] == name:
+                # TODO: Login to KODI with person["name"] and person["password"] here.
+                break
+
+
 class TV:
     def __init__(self, device, timeout=TV_TIMEOUT_SECONDS, aux_on_command="", aux_off_command=""):
         self.device = device
@@ -87,11 +98,12 @@ class TV:
 
 
 class Recognizer:
-    def __init__(self, people, camera_index, cores, tv,):
+    def __init__(self, people, camera_index, cores, tv, kodi):
         self.people = people
         self.camera_index = camera_index
         self.cores = cores
         self.tv = tv
+        self.kodi = kodi
 
     @staticmethod
     def _encode_face(path):
@@ -157,7 +169,7 @@ class Recognizer:
 
         try:
             # Spawn one thread for each face encoder.
-            encode_thread = thread_pool.map_async(Recognizer._encode_face, [(p["path"]) for p in people])
+            encode_thread = thread_pool.map_async(Recognizer._encode_face, [(p["image"]) for p in people])
 
             # While encoding the faces, open the video capture (webcam).
             video_capture = cv2.VideoCapture(camera_index)
@@ -192,6 +204,7 @@ class Recognizer:
 
                     print("Found: %s" % name)
                     if authenticated:
+                        self.kodi.login(name)
                         self.tv.on()
 
             print("Capture #%d doesn't exist or was unexpectedly closed" % camera_index)
@@ -208,7 +221,7 @@ def main():
     parser.add_argument("-c", "--cores", type=int, default=-1, metavar="N",
                         help="Number of cores to utilize, -1 will use all available cores")
     parser.add_argument("-p", "--people", type=str, default="people.json",
-                        help="JSON encoded file with names and their corresponding image file path")
+                        help="JSON encoded file with names and their corresponding image file path and password")
     parser.add_argument("-t", "--tv", type=int, default=1, metavar="N",
                         help="TV device index (CEC ID)")
     parser.add_argument("-s", "--off-timeout", type=int, default=TV_TIMEOUT_SECONDS, metavar="T",
@@ -225,8 +238,9 @@ def main():
         print("People data file: '%s' does not exit" % args.people)
         return
 
+    kodi = KODI(people)
     tv = TV(args.tv, timeout=args.off_timeout, aux_on_command=args.aux_on_cmd, aux_off_command=args.aux_off_cmd)
-    Recognizer(people, args.camera, args.cores, tv).run()
+    Recognizer(people, args.camera, args.cores, tv, kodi).run()
 
 
 if __name__ == "__main__":
