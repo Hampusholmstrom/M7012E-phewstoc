@@ -80,49 +80,6 @@ type HeartIntradayDatapoint struct {
 	HeartRate HeartRate `json:"value"`
 }
 
-type Sleep struct {
-	Sleep []SleepDatapoint `json:"sleep"`
-}
-
-type SleepDatapoint struct {
-	Data                string      `json:"dateOfSleep"`
-	Duration            int         `json:"duration"`
-	Efficiency          int         `json:"efficiency"`
-	IsMainSleep         bool        `json:"isMainSleep"`
-	Levels              SleepLevels `json:"levels"`
-	LogId               int         `json:"logId"`
-	MinutesAfterWakeup  int         `json:"minutesAfterWakeup"`
-	MinutesAsleep       int         `json:"minutesAsleep"`
-	MinutesAwake        int         `json:"minutesAwake"`
-	MinutesToFallAsleep int         `json:"minutesToFallAsleep"`
-	StartTime           string      `json:"startTime"`
-	TimeInBed           int         `json:"timeInBed"`
-	Type                string      `json:"type"`
-}
-
-type SleepLevels struct {
-	Summary   SleepLevelsSummary     `json:"summary"`
-	Data      []SleepLevelsDatapoint `json:"data"`
-	ShortData []SleepLevelsDatapoint `json:"shortData"`
-}
-
-type SleepLevelsSummary struct {
-	Deep  SleepLevel `json:"deep"`
-	Light SleepLevel `json:"light"`
-	Rem   SleepLevel `json:"rem"`
-	Wake  SleepLevel `json:"wake"`
-}
-type SleepLevel struct {
-	Count           int `json:"count"`
-	Minutes         int `json:"minutes"`
-	AvgMinutes30Day int `json:"thirtyDayAvgMinutes"`
-}
-
-type SleepLevelsDatapoint struct {
-	Datetime string `json:"datetime"`
-	Level    string `json:"level"`
-	Duration int    `json:"seconds"`
-}
 
 func success(w http.ResponseWriter, r *http.Request) {
 	fmt.Print(r)
@@ -166,7 +123,7 @@ func success(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Println(accessTokenInfo)
 
-	reqURL := "https://api.fitbit.com/1.2/user/" + accessTokenInfo.UserId + "/sleep/date/2019-02-22.json"
+	reqURL := "https://api.fitbit.com/1.2/user/" + accessTokenInfo.UserId + "/activities/heart/date/today/1d/1sec.json"
 	getReq, err := http.NewRequest("GET", reqURL, nil)
 	if err != nil {
 		fmt.Println("some get reqq err")
@@ -179,11 +136,11 @@ func success(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Println(getResp.Status)
 
-	var sleepLog Sleep
+	var heartRate Heart
 	//	body, err := ioutil.ReadAll(getResp.Body)
 	//	fmt.Println(string(body))
-	err = json.NewDecoder(getResp.Body).Decode(&sleepLog)
-	fmt.Fprint(w, sleepLog)
+	err = json.NewDecoder(getResp.Body).Decode(&heartRate)
+	fmt.Fprint(w, heartRate)
 	// fmt.Println(sleepLog.Sleep[0].Data)
 	// fmt.Fprint(w, getResp)
 	// fmt.Println(resp)
