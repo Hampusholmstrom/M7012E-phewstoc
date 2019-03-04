@@ -40,31 +40,7 @@ type HeartRate int64
 type Calorie float64
 
 type Heart struct {
-	ActivitiesHeart         []ActivityHeart         `json:"activities-heart"`
-	ActivitiesHeartIntraday []ActivityHeartIntraday `json:"activities-heart-intraday"`
-}
-
-type ActivityHeart struct {
-	DateTime string             `json:"dateTime"`
-	Value    ActivityHeartValue `json:"value"`
-}
-
-type ActivityHeartValue struct {
-	CustomHeartRateZones []CustomHeartRateZone `json:"customHeartRateZones"`
-	HeartRateZones       []HeartRateZone       `json:"heartRateZones"`
-	RestingHeartRate     HeartRate             `json:"restingHeartRate"`
-}
-
-type CustomHeartRateZone struct {
-	// TODO
-}
-
-type HeartRateZone struct {
-	CaloriesOut Calorie   `json:"caloriesOut"`
-	Max         HeartRate `json:"max"`
-	Min         HeartRate `json:"min"`
-	Minutes     HeartRate `json:"minutes"`
-	Name        string    `json:"name"`
+	ActivitiesHeartIntraday ActivityHeartIntraday `json:"activities-heart-intraday"`
 }
 
 type ActivityHeartIntraday struct {
@@ -123,7 +99,7 @@ func authOnSuccess(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Println(accessTokenInfo)
 
-	// reqURL := "https://api.fitbit.com/1/user/" + accessTokenInfo.UserId + "/activities/heart/date/today/1d/1sec.json"
+    reqURL := "https://api.fitbit.com/1/user/" + accessTokenInfo.UserId + "/activities/heart/date/today/1d/1sec/time/05:00/05:01.json"
 	getReq, err := http.NewRequest("GET", reqURL, nil)
 	if err != nil {
 		fmt.Println("some get reqq err")
