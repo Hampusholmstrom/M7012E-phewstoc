@@ -7,10 +7,8 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	// "io/ioutil"
 	"os"
 	"strings"
-	// "github.com/satori/go.uuid"
 )
 
 var params authParams
@@ -23,9 +21,9 @@ type authParams struct {
 	redirect_uri  string
 }
 
-func answer(w http.ResponseWriter, r *http.Request) {
+func welcomeMessage(w http.ResponseWriter, r *http.Request) {
 	fmt.Println(r)
-	fmt.Fprintf(w, "AWAKE")
+	fmt.Fprintf(w, "Welcome to the Phewstoc fitbit companion app!")
 }
 
 func register(w http.ResponseWriter, r *http.Request) {
@@ -81,33 +79,35 @@ type HeartIntradayDatapoint struct {
 }
 
 
-func success(w http.ResponseWriter, r *http.Request) {
-	fmt.Print(r)
-	fmt.Fprintf(w, "Received! :)")
+func authOnSuccess(w http.ResponseWriter, r *http.Request) {
+	authURL := "https://api.fitbit.com/oauth2/token"
 
 	keys, ok := r.URL.Query()["code"]
 	if !ok || len(keys[0]) < 1 {
 		log.Println("Url param 'code' is missing")
 	}
-	fmt.Print(keys)
 
-	authURL := "https://api.fitbit.com/oauth2/token"
-	v := url.Values{}
 	client := &http.Client{}
-	v.Add("client_id", params.client_id)
+
+	v := url.Values{}
+    v.Add("client_id", params.client_id)
 	v.Add("grant_type", "authorization_code")
 	v.Add("code", keys[0])
-	req, err := http.NewRequest("POST", authURL, strings.NewReader(v.Encode()))
+
+    req, err := http.NewRequest("POST", authURL, strings.NewReader(v.Encode()))
 	if err != nil {
-		fmt.Println("some Post Err")
+		fmt.Println("authentication error while obtaining acesstoken")
 	}
+
 	req.Header.Set("Authorization", "Basic "+concAuth(params.client_id, params.client_secret))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
 	resp, err := client.Do(req)
 	if err != nil {
 		fmt.Println(err)
 		fmt.Println("some client Do err")
 	}
+
 	fmt.Println(resp.Status)
 	type ResponseInfo struct {
 		AccessToken  string `json:"access_token"`
@@ -123,7 +123,7 @@ func success(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Println(accessTokenInfo)
 
-	reqURL := "https://api.fitbit.com/1.2/user/" + accessTokenInfo.UserId + "/activities/heart/date/today/1d/1sec.json"
+	// reqURL := "https://api.fitbit.com/1/user/" + accessTokenInfo.UserId + "/activities/heart/date/today/1d/1sec.json"
 	getReq, err := http.NewRequest("GET", reqURL, nil)
 	if err != nil {
 		fmt.Println("some get reqq err")
@@ -140,7 +140,7 @@ func success(w http.ResponseWriter, r *http.Request) {
 	//	body, err := ioutil.ReadAll(getResp.Body)
 	//	fmt.Println(string(body))
 	err = json.NewDecoder(getResp.Body).Decode(&heartRate)
-	fmt.Fprint(w, heartRate)
+	fmt.Fprint(w, heartRate.ActivitiesHeartIntraday)
 	// fmt.Println(sleepLog.Sleep[0].Data)
 	// fmt.Fprint(w, getResp)
 	// fmt.Println(resp)
@@ -153,9 +153,9 @@ func fitbitData(w http.ResponseWriter, r *http.Request) {
 func main() {
 	params = authParams{os.Args[1], os.Args[2], os.Args[3], os.Args[4], os.Args[5]}
 
-	http.HandleFunc("/", answer)
+	http.HandleFunc("/", welcomeMessage)
 	http.HandleFunc("/register/", register)
-	http.HandleFunc("/success/", success)
+	http.HandleFunc("/success/", authOnSuccess)
 	http.HandleFunc("/subscribe/sleep/", fitbitData)
 
 	err := http.ListenAndServeTLS(":443", "/etc/letsencrypt/live/phewstoc.sladic.se/fullchain.pem", "/etc/letsencrypt/live/phewstoc.sladic.se/privkey.pem", nil)
