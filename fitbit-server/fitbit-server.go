@@ -143,6 +143,8 @@ func getTime() string {
 }
 
 func isSleeping(w http.ResponseWriter, r *http.Request) {
+	refreshToken()
+
 	heartRate := getHeartRateData()
 	lowerbpm := findLowerHeartBeat(heartRate)
 	upperbpm := findUpperHeartBeat(heartRate)
@@ -178,6 +180,31 @@ func findUpperHeartBeat(heartRateData Heart) int {
 	}
 	fmt.Println("upper bpm: " + strconv.Itoa(upper))
 	return upper
+}
+
+func refreshToken() {
+	client := &http.Client{}
+	v := url.Values{}
+	v.Add("grant_type", "authorization_code")
+	v.Add("refresh_token", params.refresh_token)
+	req, err := http.NewRequest("POST", "https://api.fitbit.com/oauth2/token", strings.NewReader(v.Encode()))
+	if err != nil {
+		fmt.Println("Unable to create request.")
+	}
+	req.Header.Set("Authorization", "Basic "+concAuth(params.client_id, params.client_secret))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println(err)
+		fmt.Println("some client Do err")
+	}
+	fmt.Println(resp.Status)
+	err = json.NewDecoder(resp.Body).Decode(&accessTokenInfo)
+	if err != nil {
+		fmt.Println("error:", err)
+	} else {
+		params.refresh_token = accessTokenInfo.RefreshToken
+	}
 }
 
 func main() {
