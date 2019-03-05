@@ -49,16 +49,16 @@ type HeartRate int64
 type Calorie float64
 
 type Heart struct {
-	ActivitiesHeartIntraday ActivityHeartIntraday `json:"activities-heart-intraday"`
-	ActivitiesHeart 				ActivitiesHeart				`json:"activities-heart"`
+	ActivitiesHeartIntraday ActivityHeartIntraday	`json:"activities-heart-intraday"`
+	ActivitiesHeart		[]ActivitiesHeart		`json:"activities-heart"`
 }
 
 type ActivitiesHeart struct {
-	Dataset  []RestingHeartRate `json:"dataset"`
+	Value Value `json:"value"`
 }
 
-type RestingHeartRate struct {
-	HeartRate HeartRate `json:"restingHeartRate"`
+type Value struct {
+	RestingHeartRate HeartRate `json:"restingHeartRate"`
 }
 
 type ActivityHeartIntraday struct {
@@ -108,11 +108,11 @@ func authOnSuccess(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Println("error:", err)
 	} else {
-		authParams.refresh_token = accessTokenInfo.RefreshToken
+		params.refresh_token = accessTokenInfo.RefreshToken
 	}
 	//fmt.Println(accessTokenInfo)
 	heartRate := getHeartRateData()
-	fmt.Fprint(w, heartRate.Heart)
+	fmt.Fprint(w, heartRate)
 	//fmt.Fprint(w, heartRate.ActivitiesHeartIntraday)
 	//fmt.Fprint(w, heartRate.ActivitiesHeart)
 }
@@ -125,6 +125,7 @@ func getHeartRateData() Heart {
 	}
 	getReq.Header.Set("Authorization", "Bearer "+accessTokenInfo.AccessToken)
 	fmt.Println(getReq)
+	client := &http.Client{}
 	getResp, err := client.Do(getReq)
 	if err != nil {
 		fmt.Println("some client do get req error")
@@ -139,16 +140,16 @@ func getHeartRateData() Heart {
 func fitbitData(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
-
+/*
 func refreshToken(w http.ResponseWriter, r *http.Request) {
 	client := &http.Client{}
 
 	v := url.Values{}
 	v.Add("grant_type", "authorization_code")
-	v.Add("refresh_token", authParams.refresh_token)
+	v.Add("refresh_token", params.refresh_token)
 
 	req, err := http.NewRequest("POST", "https://api.fitbit.com/oauth2/token", strings.NewReader(v.Encode()))
-	if err != nill {
+	if err != nil {
 		fmt.Println("Unable to create request.")
 	}
 
@@ -160,8 +161,8 @@ func refreshToken(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(err)
 		fmt.Println("some client Do err")
 	}
-}
-
+}*/
+/*
 func isSleeping(w http.ResponseWriter, r *http.Request) {
 	// Call on register to retrive data from FitBit
 
@@ -175,16 +176,16 @@ func isSleeping(w http.ResponseWriter, r *http.Request) {
 		// return false
 	}
 }
-
+*/
 func main() {
-	params = authParams{os.Args[1], os.Args[2], os.Args[3], os.Args[4], os.Args[5]}
+	params = authParams{os.Args[1], os.Args[2], os.Args[3], os.Args[4], os.Args[5], os.Args[6]}
 
 	http.HandleFunc("/", welcomeMessage)
 	http.HandleFunc("/register/", register)
 	http.HandleFunc("/success/", authOnSuccess)
 	http.HandleFunc("/subscribe/sleep/", fitbitData)
-	http.HandleFunc("/refresh_token/", refreshToken)
-	http.HandleFunc("/is_sleeping/", isSleeping)
+//	http.HandleFunc("/refresh_token/", refreshToken)
+//	http.HandleFunc("/is_sleeping/", isSleeping)
 
 	err := http.ListenAndServeTLS(":443", "/etc/letsencrypt/live/phewstoc.sladic.se/fullchain.pem", "/etc/letsencrypt/live/phewstoc.sladic.se/privkey.pem", nil)
 	if err != nil {
