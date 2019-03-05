@@ -10,16 +10,17 @@ import (
 	"os"
 	"strings"
 	"time"
-	"strconv"
 )
 
 var params authParams
+
 type authParams struct {
 	client_id     string
 	client_secret string
 }
 
 var authCredentials Credentials
+
 type Credentials struct {
 	AccessToken  string `json:"access_token"`
 	ExpiresIn    int    `json:"expires_in"`
@@ -28,7 +29,7 @@ type Credentials struct {
 	UserId       string `json:"user_id"`
 }
 
-func welcomeMessage(w http.ResponseWriter) {
+func welcomeMessage(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Welcome to the Phewstoc fitbit companion app!")
 }
 
@@ -40,7 +41,7 @@ func concAuth(clientId string, clientSecret string) string {
 }
 
 type Heart struct {
-	ActivitiesHeartIntraday ActivityHeartIntraday	`json:"activities-heart-intraday"`
+	ActivitiesHeartIntraday ActivityHeartIntraday `json:"activities-heart-intraday"`
 }
 
 type ActivityHeartIntraday struct {
@@ -50,15 +51,15 @@ type ActivityHeartIntraday struct {
 }
 
 type HeartIntradayDatapoint struct {
-	Time      string    `json:"time"`
-	HeartRate int `json:"value"`
+	Time      string `json:"time"`
+	HeartRate int    `json:"value"`
 }
 
 func isSleeping(w http.ResponseWriter, r *http.Request) {
-    registerUrl := "https://www.fitbit.com/oauth2/authorize?response_type=code&client_id=" + params.client_id + "&scope=heartrate"
+	registerUrl := "https://www.fitbit.com/oauth2/authorize?response_type=code&client_id=" + params.client_id + "&scope=heartrate"
 	http.Redirect(w, r, registerUrl, http.StatusSeeOther)
 
-    authURL := "https://api.fitbit.com/oauth2/token"
+	authURL := "https://api.fitbit.com/oauth2/token"
 
 	keys, ok := r.URL.Query()["code"]
 	if !ok || len(keys[0]) < 1 {
@@ -83,18 +84,16 @@ func isSleeping(w http.ResponseWriter, r *http.Request) {
 	authResponse, err := client.Do(req)
 	if err != nil {
 		fmt.Println(err)
-		fmt.Println("some client Do err")
+		fmt.Println("Unable to complete authentication request")
 	}
 
 	err = json.NewDecoder(authResponse.Body).Decode(&authCredentials)
 	if err != nil {
 		fmt.Println("error:", err)
-	} else {
-		params.refresh_token = accessTokenInfo.RefreshToken
 	}
 
-    startTime, endTime := getTime()
-	heartURL := "https://api.fitbit.com/1/user/" + accessTokenInfo.UserId + "/activities/heart/date/today/1d/1sec/time/" + startTime + "/" + endTime + ".json"
+	startTime, endTime := getTime()
+	heartURL := "https://api.fitbit.com/1/user/" + authCredentials.UserId + "/activities/heart/date/today/1d/1sec/time/" + startTime + "/" + endTime + ".json"
 
 	heartReq, err := http.NewRequest("GET", heartURL, nil)
 	if err != nil {
@@ -108,19 +107,19 @@ func isSleeping(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var heartRateData Heart
-	err = json.NewDecoder(getResp.Body).Decode(&heartRateData)
+	err = json.NewDecoder(heartResp.Body).Decode(&heartRateData)
 
-    lowerBpm, upperBpm := analyzeHeartData(heartRate)
+	lowerBpm, upperBpm := analyzeHeartData(heartRateData)
 
-	if lowerbpm == 999 {
+	if lowerBpm == 999 {
 		fmt.Fprintf(w, "CRUCIAL: WE HAVE NO DATA!")
-        // fitbit data is empty
-        w.WriteHeader(204)
-	} else if  upperbpm - lowerbpm <= 20 && upperbpm <= 70 { // Test case (original value might be 10 & 50)
+		// fitbit data is empty
+		w.WriteHeader(204)
+	} else if upperBpm-lowerBpm <= 20 && upperBpm <= 70 { // Test case (original value might be 10 & 50)
 		// Person is sleeping
-        w.WriteHeader(418)
-    } else {
-        // Person is awake
+		w.WriteHeader(418)
+	} else {
+		// Person is awake
 		w.WriteHeader(200)
 	}
 }
@@ -134,16 +133,16 @@ func getTime() (string, string) {
 
 func analyzeHeartData(heartRateData Heart) (int, int) {
 	lower := 999
-    upper := 0
+	upper := 0
 	for _, dataPoint := range heartRateData.ActivitiesHeartIntraday.Dataset {
 		if lower > dataPoint.HeartRate {
 			lower = dataPoint.HeartRate
 		}
-        if upper < dataPoint.HeartRate {
-            upper = dataPoint.HeartRate
-        }
+		if upper < dataPoint.HeartRate {
+			upper = dataPoint.HeartRate
+		}
 	}
-    return lower, upper
+	return lower, upper
 }
 
 func main() {
