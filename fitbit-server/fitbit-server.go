@@ -45,20 +45,11 @@ func concAuth(clientId string, clientSecret string) string {
 	return b64.StdEncoding.EncodeToString([]byte(idAndSecret))
 }
 
-type HeartRate int64
+//type HeartRate int64
 type Calorie float64
 
 type Heart struct {
 	ActivitiesHeartIntraday ActivityHeartIntraday	`json:"activities-heart-intraday"`
-	ActivitiesHeart		[]ActivitiesHeart		`json:"activities-heart"`
-}
-
-type ActivitiesHeart struct {
-	Value Value `json:"value"`
-}
-
-type Value struct {
-	RestingHeartRate HeartRate `json:"restingHeartRate"`
 }
 
 type ActivityHeartIntraday struct {
@@ -69,7 +60,7 @@ type ActivityHeartIntraday struct {
 
 type HeartIntradayDatapoint struct {
 	Time      string    `json:"time"`
-	HeartRate HeartRate `json:"value"`
+	HeartRate int `json:"value"`
 }
 
 
@@ -126,17 +117,15 @@ func getHeartRateData() Heart {
 		fmt.Println("some client do get req error")
 	}
 	fmt.Println(getResp.Status)
-
+	var heartRateData Heart
 	err = json.NewDecoder(getResp.Body).Decode(&heartRateData)
 	return heartRateData
 }
 
 func isSleeping(w http.ResponseWriter, r *http.Request) {
-	var heartRateData Heart
 	heartRate := getHeartRateData()
-
-	lowerbpm := findLowerHeartBeat()
-	upperbpm := findUpperHeartBeat()
+	lowerbpm := findLowerHeartBeat(heartRate)
+	upperbpm := findUpperHeartBeat(heartRate)
 
 	if lowerbpm == 999 {
 		w.WriteHeader(http.StatusNoContent)
@@ -149,21 +138,21 @@ func isSleeping(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func findLowerHeartBeat() int64 {
+func findLowerHeartBeat(heartRateData Heart) int {
 	lower := 999
-	for _, rate := range heartRateData.ActivityHeartIntraday.HeartIntradayDatapoint.HeartRate {
-		if lower > rate {
-			lower = rate
+	for _, datapoint := range heartRateData.ActivitiesHeartIntraday.Dataset {
+		if lower > datapoint.HeartRate {
+			lower = datapoint.HeartRate
 		}
 	}
 	return lower
 }
 
-func findUpperHeartBeat() int64 {
+func findUpperHeartBeat(heartRateData Heart) int {
 	upper := -1
-	for _, rate := range heartRateData.ActivityHeartIntraday.HeartIntradayDatapoint.HeartRate {
-		if upper < rate {
-			upper = rate
+	for _, datapoint := range heartRateData.ActivitiesHeartIntraday.Dataset {
+		if upper < datapoint.HeartRate {
+			upper = datapoint.HeartRate
 		}
 	}
 	return upper
