@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
+	"strconv"
 )
 
 var params authParams
@@ -75,11 +77,11 @@ func authOnSuccess(w http.ResponseWriter, r *http.Request) {
 	client := &http.Client{}
 
 	v := url.Values{}
-  v.Add("client_id", params.client_id)
+	v.Add("client_id", params.client_id)
 	v.Add("grant_type", "authorization_code")
 	v.Add("code", keys[0])
 
-  req, err := http.NewRequest("POST", authURL, strings.NewReader(v.Encode()))
+	req, err := http.NewRequest("POST", authURL, strings.NewReader(v.Encode()))
 	if err != nil {
 		fmt.Println("authentication error while obtaining acesstoken")
 	}
@@ -101,11 +103,12 @@ func authOnSuccess(w http.ResponseWriter, r *http.Request) {
 	} else {
 		params.refresh_token = accessTokenInfo.RefreshToken
 	}
-	w.WriteHeader(http.StatusNoContent)
+	//w.WriteHeader(http.StatusNoContent)
+	fmt.Fprintf(w, "successfully registered!")
 }
 
 func getHeartRateData() Heart {
-	reqURL := "https://api.fitbit.com/1/user/" + accessTokenInfo.UserId + "/activities/heart/date/today/1d/1sec/time/05:00/05:01.json"
+	reqURL := "https://api.fitbit.com/1/user/" + accessTokenInfo.UserId + "/activities/heart/date/today/1d/1sec/time/" + getTime() + "/" + getActualTime() + ".json"
 	getReq, err := http.NewRequest("GET", reqURL, nil)
 	if err != nil {
 		fmt.Println("some get reqq err")
@@ -123,21 +126,35 @@ func getHeartRateData() Heart {
 	return heartRateData
 }
 
+func getActualTime() string {
+	loc, _ := time.LoadLocation("Europe/Stockholm")
+	t := time.Now().Add(time.Duration(-17) * time.Minute).In(loc).Format("15:04")
+	fmt.Println("Getting time from: " + t)
+	return t
+	//fmt.Println(time.Now().In(loc).Format("15:04"))
+}
+
+func getTime() string {
+	loc, _ := time.LoadLocation("Europe/Stockholm")
+	t := time.Now().Add(time.Duration(-18) * time.Minute).In(loc).Format("15:04")
+	fmt.Println("Getting time to: " + t)
+	return t
+	//fmt.Println(time.Now().Add(time.Duration(-1) * time.Minute).In(loc).Format("15:04"))
+}
+
 func isSleeping(w http.ResponseWriter, r *http.Request) {
 	heartRate := getHeartRateData()
 	lowerbpm := findLowerHeartBeat(heartRate)
 	upperbpm := findUpperHeartBeat(heartRate)
 
 	if lowerbpm == 999 {
-		w.WriteHeader(http.StatusNoContent)
-	}
-
-	if upperbpm - upperbpm <= 20 && upperbpm <= 70 { // Test case (original value might be 10 & 50)
-		//.WriteHeader(418) // Person is sleeping
-		fmt.Fprintf(w, "Person is sleeping.")
+		fmt.Fprintf(w, "CRUCIAL: WE HAVE NO DATA!")
+	} else if  upperbpm - upperbpm <= 20 && upperbpm <= 70 { // Test case (original value might be 10 & 50)
+		w.WriteHeader(418) // Person is sleeping
+		//fmt.Fprintf(w, "Person is sleeping.")
 	} else {
-		//w.WriteHeader(200) // Person is awake
-		fmt.Fprintf(w, "Person is not sleeping.")
+		w.WriteHeader(200) // Person is awake
+		//fmt.Fprintf(w, "Person is not sleeping.")
 	}
 }
 
@@ -148,6 +165,7 @@ func findLowerHeartBeat(heartRateData Heart) int {
 			lower = datapoint.HeartRate
 		}
 	}
+	fmt.Println("Lower bpm: " + strconv.Itoa(lower))
 	return lower
 }
 
@@ -158,6 +176,7 @@ func findUpperHeartBeat(heartRateData Heart) int {
 			upper = datapoint.HeartRate
 		}
 	}
+	fmt.Println("upper bpm: " + strconv.Itoa(upper))
 	return upper
 }
 
