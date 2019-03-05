@@ -140,6 +140,10 @@ func isSleeping(w http.ResponseWriter, r *http.Request) {
 	lowerbpm := findLowerHeartBeat()
 	upperbpm := findUpperHeartBeat()
 
+	if lowerbpm == nil {
+		w.WriteHeader(http.StatusNoContent)
+	}
+
 	if upperbpm - upperbpm <= 20 && upperbpm <= 70 { // Test case (original value might be 10 & 50)
 		w.WriteHeader(418) // Person is sleeping
 	} else {
@@ -147,9 +151,9 @@ func isSleeping(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func findLowerHeartBeat() {
+func findLowerHeartBeat() int {
 	lower := nil
-	for _, rate := range heartRateData.ActivityHeartIntraday.HeartIntradayDatapoint {
+	for _, rate := range heartRateData.ActivityHeartIntraday.HeartIntradayDatapoint.HeartRate {
 		if lower > rate || lower == nil {
 			lower = rate
 		}
@@ -157,9 +161,9 @@ func findLowerHeartBeat() {
 	return lower
 }
 
-func findUpperHeartBeat() {
+func findUpperHeartBeat() int {
 	upper := nil
-	for _, rate := range heartRateData.ActivityHeartIntraday.HeartIntradayDatapoint {
+	for _, rate := range heartRateData.ActivityHeartIntraday.HeartIntradayDatapoint.HeartRate {
 		if upper < rate || upper == nil {
 			upper = rate
 		}
