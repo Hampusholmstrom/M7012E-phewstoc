@@ -18,13 +18,14 @@ import face_recognition
 import numpy as np
 from kodipydent import Kodi
 
-TV_TIMEOUT_SECONDS = 600
+PAUSE_TIMEOUT_SECONDS = 300
+OFF_TIMEOUT_SECONDS = 600
 
 
 class KODI:
-    def __init__(self, people):
+    def __init__(self, people, address="localhost"):
         self.people = people
-        self.kodi = Kodi('localhost')
+        self.kodi = Kodi(address)
 
     def login(self, name):
         for person in self.people:
@@ -33,20 +34,37 @@ class KODI:
                 # TODO: Login to KODI with person["name"] and person["password"] here.
                 break
 
-    def pause(self):
+    def pause(self, name):
+        self.kodi.GUI.ShowNotification(title="Are you there?", message="Show your face %s" % name)
         players = self.kodi.Player.GetActivePlayers()
         for player in players["result"]:
             properties = self.kodi.Player.GetProperties(playerid=player["playerid"], properties=["speed"])
             if properties["result"]["speed"] > 0:
                 self.kodi.Player.PlayPause(player["playerid"])
 
+    def play(self, name):
+        self.kodi.GUI.ShowNotification(title="Ah, there you are!", message="Nice face, you look beautiful %s" % name)
+        players = self.kodi.Player.GetActivePlayers()
+        for player in players["result"]:
+            properties = self.kodi.Player.GetProperties(playerid=player["playerid"], properties=["speed"])
+            if properties["result"]["speed"] <= 0:
+                self.kodi.Player.PlayPause(player["playerid"])
+
 
 class TV:
-    def __init__(self, device, kodi, timeout=TV_TIMEOUT_SECONDS, aux_on_command="", aux_off_command=""):
+    def __init__(self,
+                 device,
+                 kodi,
+                 pause_timeout=PAUSE_TIMEOUT_SECONDS,
+                 off_timeout=OFF_TIMEOUT_SECONDS,
+                 aux_on_command="",
+                 aux_off_command=""):
         self.kodi = kodi
         self.device = device
-        self.timeout = timeout
+        self.pause_timeout = pause_timeout
+        self.off_timeout = off_timeout
         self.is_on = False
+        self.resume = False
 
         self.aux_off_command = aux_off_command
         self.aux_on_command = aux_on_command
@@ -63,8 +81,11 @@ class TV:
             print("AUX command '%s' returned output: %s" % (command, proc.stdout.decode('utf-8')))
 
     def _cec_send(self, command):
-        run(["cec-client", "-s", "-d", str(self.device)], stdout=PIPE,
-            input=command, universal_newlines=True, check=True)
+        run(["cec-client", "-s", "-d", str(self.device)],
+            stdout=PIPE,
+            input=command,
+            universal_newlines=True,
+            check=True)
 
     def _run_scheduler(self):
         while True:
@@ -78,13 +99,11 @@ class TV:
 
     def _off(self):
         print("Turning off TV")
-
-        self.kodi.pause()
-
         try:
             print("Sending CEC 'standby' signal")
             self._cec_off()
             self.is_on = False
+            self.resume = False
         except CalledProcessError as e:
             print("Failed to turn off TV with CEC: %s" % e)
 
@@ -95,11 +114,24 @@ class TV:
             except CalledProcessError as e:
                 print("Failed to run auxiliary 'off' command: %s" % e)
 
+    def _pause(self, name):
+        print("Pausing TV playback")
+        self.resume = True
+        self.kodi.pause(name)
+
+    def _play(self, name):
+        if self.resume:
+            print("Resuming TV playback")
+            self.resume = False
+            self.kodi.play(name)
+
     def on(self, name="Unknown"):
         # Deque old turn off TV events.
         deque(map(self.scheduler.cancel, self.scheduler.queue))
 
-        if not self.is_on:
+        if self.is_on:
+            self._play(name)
+        else:
             print("Turning on TV")
 
             self.kodi.login(name)
@@ -119,7 +151,8 @@ class TV:
                 print("Failed to turn on TV: %s" % e)
 
         # Add new turn off TV event.
-        self.scheduler.enter(self.timeout, 1, self._off)
+        self.scheduler.enter(self.off_timeout, 1, self._off)
+        self.scheduler.enter(self.pause_timeout, 1, self._pause, argument=(name, ))
 
 
 class Recognizer:
@@ -222,9 +255,9 @@ class Recognizer:
                 face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
 
                 # Compare faces and display the results.
-                for name, authenticated in thread_pool.starmap(
-                        Recognizer._compare_face,
-                        [(known_face_names, known_face_encodings, e) for e in face_encodings]):
+                for name, authenticated in thread_pool.starmap(Recognizer._compare_face,
+                                                               [(known_face_names, known_face_encodings, e)
+                                                                for e in face_encodings]):
 
                     print("Found: %s" % name)
                     if authenticated:
@@ -239,16 +272,37 @@ class Recognizer:
 
 def main():
     parser = argparse.ArgumentParser(description="Recognize and identify faces.")
-    parser.add_argument("-i", "--camera", type=int, default=-1, metavar="N",
-                        help="Camera index, -1 picks the default camera")
-    parser.add_argument("-c", "--cores", type=int, default=-1, metavar="N",
-                        help="Number of cores to utilize, -1 will use all available cores")
-    parser.add_argument("-p", "--people", type=str, default="people.json",
-                        help="JSON encoded file with names and their corresponding image file path and password")
-    parser.add_argument("-t", "--tv", type=int, default=1, metavar="N",
-                        help="TV device index (CEC ID)")
-    parser.add_argument("-s", "--off-timeout", type=int, default=TV_TIMEOUT_SECONDS, metavar="T",
-                        help="Timeout to send off signal if no face was recognized.")
+    parser.add_argument(
+        "-i", "--camera", type=int, default=-1, metavar="N", help="Camera index, -1 picks the default camera")
+    parser.add_argument(
+        "-c",
+        "--cores",
+        type=int,
+        default=-1,
+        metavar="N",
+        help="Number of cores to utilize, -1 will use all available cores")
+    parser.add_argument(
+        "-p",
+        "--people",
+        type=str,
+        default="people.json",
+        help="JSON encoded file with names and their corresponding image file path and password")
+    parser.add_argument("-a", "--address", type=str, default="localhost", help="KODI control address")
+    parser.add_argument("-t", "--tv", type=int, default=1, metavar="N", help="TV device index (CEC ID)")
+    parser.add_argument(
+        "-s",
+        "--off-timeout",
+        type=int,
+        default=OFF_TIMEOUT_SECONDS,
+        metavar="T",
+        help="Timeout to send off signal if no face was recognized.")
+    parser.add_argument(
+        "-n",
+        "--pause-timeout",
+        type=int,
+        default=PAUSE_TIMEOUT_SECONDS,
+        metavar="T",
+        help="Timeout to send pause signal if no face was recognized.")
     parser.add_argument("--aux-on-cmd", type=str, default="")
     parser.add_argument("--aux-off-cmd", type=str, default="")
 
@@ -261,8 +315,14 @@ def main():
         print("People data file: '%s' does not exit" % args.people)
         return
 
-    kodi = KODI(people)
-    tv = TV(args.tv, kodi, timeout=args.off_timeout, aux_on_command=args.aux_on_cmd, aux_off_command=args.aux_off_cmd)
+    kodi = KODI(people, args.address)
+    tv = TV(
+        args.tv,
+        kodi,
+        pause_timeout=args.pause_timeout,
+        off_timeout=args.off_timeout,
+        aux_on_command=args.aux_on_cmd,
+        aux_off_command=args.aux_off_cmd)
     Recognizer(people, args.camera, args.cores, tv).run()
 
 
