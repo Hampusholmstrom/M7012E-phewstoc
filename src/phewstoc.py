@@ -16,6 +16,7 @@ from threading import Thread
 import cv2
 import face_recognition
 import numpy as np
+from kodipydent import Kodi
 
 TV_TIMEOUT_SECONDS = 600
 
@@ -23,18 +24,29 @@ TV_TIMEOUT_SECONDS = 600
 class KODI:
     def __init__(self, people):
         self.people = people
+        self.kodi = Kodi('localhost')
 
     def login(self, name):
-        for person in self.people.item():
+        for person in self.people:
             if person["name"] == name:
+                self.kodi.GUI.ShowNotification(title="Welcome", message=name)
                 # TODO: Login to KODI with person["name"] and person["password"] here.
                 break
 
+    def toggle_pause(self):
+        players = self.kodi.Player.GetActivePlayers()
+        for player in players["result"]:
+            properties = self.kodi.Player.GetProperties(playerid=player["playerid"], properties=["speed"])
+            if properties["result"]["speed"] > 0:
+                self.kodi.Player.PlayPause(player["playerid"])
+
 
 class TV:
-    def __init__(self, device, timeout=TV_TIMEOUT_SECONDS, aux_on_command="", aux_off_command=""):
+    def __init__(self, device, kodi, timeout=TV_TIMEOUT_SECONDS, aux_on_command="", aux_off_command=""):
+        self.kodi = kodi
         self.device = device
         self.timeout = timeout
+        self.is_on = False
 
         self.aux_off_command = aux_off_command
         self.aux_on_command = aux_on_command
@@ -66,29 +78,42 @@ class TV:
 
     def _off(self):
         print("Turning off TV")
+
+        self.kodi.toggle_pause()
+
         try:
+            print("Sending CEC 'standby' signal")
             self._cec_off()
+            self.is_on = False
         except CalledProcessError as e:
             print("Failed to turn off TV with CEC: %s" % e)
 
         if self.aux_off_command != "":
             try:
+                print("Running auxiliary 'off' command")
                 self._run_aux_command(self.aux_off_command)
             except CalledProcessError as e:
-                print("Failed to run auxiliary off command: %s" % e)
+                print("Failed to run auxiliary 'off' command: %s" % e)
 
-    def on(self):
+    def on(self, name="Unknown"):
         print("Turning on TV")
-        try:
-            self._cec_on()
-        except CalledProcessError as e:
-            print("Failed to turn on TV: %s" % e)
+
+        self.kodi.login(name)
+        self.kodi.toggle_pause()
 
         if self.aux_on_command != "":
             try:
+                print("Running auxiliary 'on' command")
                 self._run_aux_command(self.aux_on_command)
             except CalledProcessError as e:
-                print("Failed to run auxiliary on command: %s" % e)
+                print("Failed to run auxiliary 'on' command: %s" % e)
+
+        try:
+            print("Sending CEC 'on' signal")
+            self._cec_on()
+            self.is_on = True
+        except CalledProcessError as e:
+            print("Failed to turn on TV: %s" % e)
 
         # Deque old turn off TV events.
         deque(map(self.scheduler.cancel, self.scheduler.queue))
@@ -98,12 +123,11 @@ class TV:
 
 
 class Recognizer:
-    def __init__(self, people, camera_index, cores, tv, kodi):
+    def __init__(self, people, camera_index, cores, tv):
         self.people = people
         self.camera_index = camera_index
         self.cores = cores
         self.tv = tv
-        self.kodi = kodi
 
     @staticmethod
     def _encode_face(path):
@@ -203,9 +227,8 @@ class Recognizer:
                         [(known_face_names, known_face_encodings, e) for e in face_encodings]):
 
                     print("Found: %s" % name)
-                    if authenticated:
-                        self.kodi.login(name)
-                        self.tv.on()
+                    if authenticated and not self.tv.is_on:
+                        self.tv.on(name=name)
 
             print("Capture #%d doesn't exist or was unexpectedly closed" % camera_index)
 
@@ -239,8 +262,8 @@ def main():
         return
 
     kodi = KODI(people)
-    tv = TV(args.tv, timeout=args.off_timeout, aux_on_command=args.aux_on_cmd, aux_off_command=args.aux_off_cmd)
-    Recognizer(people, args.camera, args.cores, tv, kodi).run()
+    tv = TV(args.tv, kodi, timeout=args.off_timeout, aux_on_command=args.aux_on_cmd, aux_off_command=args.aux_off_cmd)
+    Recognizer(people, args.camera, args.cores, tv).run()
 
 
 if __name__ == "__main__":
