@@ -11,8 +11,6 @@ import (
 	"strings"
 )
 
-var heartRateData Heart
-
 var params authParams
 type authParams struct {
 	client_id     string
@@ -112,8 +110,6 @@ func authOnSuccess(w http.ResponseWriter, r *http.Request) {
 	} else {
 		params.refresh_token = accessTokenInfo.RefreshToken
 	}
-	heartRate := getHeartRateData()
-	fmt.Fprint(w, heartRate)
 }
 
 func getHeartRateData() Heart {
@@ -136,11 +132,13 @@ func getHeartRateData() Heart {
 }
 
 func isSleeping(w http.ResponseWriter, r *http.Request) {
+	var heartRateData Heart
+	heartRate := getHeartRateData()
 
 	lowerbpm := findLowerHeartBeat()
 	upperbpm := findUpperHeartBeat()
 
-	if lowerbpm == nil {
+	if lowerbpm == 999 {
 		w.WriteHeader(http.StatusNoContent)
 	}
 
@@ -151,20 +149,20 @@ func isSleeping(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func findLowerHeartBeat() int {
-	lower := nil
+func findLowerHeartBeat() int64 {
+	lower := 999
 	for _, rate := range heartRateData.ActivityHeartIntraday.HeartIntradayDatapoint.HeartRate {
-		if lower > rate || lower == nil {
+		if lower > rate {
 			lower = rate
 		}
 	}
 	return lower
 }
 
-func findUpperHeartBeat() int {
-	upper := nil
+func findUpperHeartBeat() int64 {
+	upper := -1
 	for _, rate := range heartRateData.ActivityHeartIntraday.HeartIntradayDatapoint.HeartRate {
-		if upper < rate || upper == nil {
+		if upper < rate {
 			upper = rate
 		}
 	}
