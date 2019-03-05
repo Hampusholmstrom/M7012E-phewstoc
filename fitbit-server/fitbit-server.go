@@ -11,6 +11,8 @@ import (
 	"strings"
 )
 
+var heartRateData Heart
+
 var params authParams
 type authParams struct {
 	client_id     string
@@ -84,7 +86,7 @@ func authOnSuccess(w http.ResponseWriter, r *http.Request) {
 	client := &http.Client{}
 
 	v := url.Values{}
-    v.Add("client_id", params.client_id)
+  v.Add("client_id", params.client_id)
 	v.Add("grant_type", "authorization_code")
 	v.Add("code", keys[0])
 
@@ -110,11 +112,8 @@ func authOnSuccess(w http.ResponseWriter, r *http.Request) {
 	} else {
 		params.refresh_token = accessTokenInfo.RefreshToken
 	}
-	//fmt.Println(accessTokenInfo)
 	heartRate := getHeartRateData()
 	fmt.Fprint(w, heartRate)
-	//fmt.Fprint(w, heartRate.ActivitiesHeartIntraday)
-	//fmt.Fprint(w, heartRate.ActivitiesHeart)
 }
 
 func getHeartRateData() Heart {
@@ -132,60 +131,49 @@ func getHeartRateData() Heart {
 	}
 	fmt.Println(getResp.Status)
 
-	var heartRate Heart
-	err = json.NewDecoder(getResp.Body).Decode(&heartRate)
-	return heartRate
+	err = json.NewDecoder(getResp.Body).Decode(&heartRateData)
+	return heartRateData
 }
 
-func fitbitData(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNoContent)
-}
-/*
-func refreshToken(w http.ResponseWriter, r *http.Request) {
-	client := &http.Client{}
-
-	v := url.Values{}
-	v.Add("grant_type", "authorization_code")
-	v.Add("refresh_token", params.refresh_token)
-
-	req, err := http.NewRequest("POST", "https://api.fitbit.com/oauth2/token", strings.NewReader(v.Encode()))
-	if err != nil {
-		fmt.Println("Unable to create request.")
-	}
-
-	req.Header.Set("Authorization", "Basic "+concAuth(params.client_id, params.client_secret))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Println(err)
-		fmt.Println("some client Do err")
-	}
-}*/
-/*
 func isSleeping(w http.ResponseWriter, r *http.Request) {
-	// Call on register to retrive data from FitBit
 
 	lowerbpm := findLowerHeartBeat()
 	upperbpm := findUpperHeartBeat()
-	timespan := findTimespanHeartBeat()
 
-	if upperbpm - upperbpm <= 10 && timespan <= 10 {
-		// return true
+	if upperbpm - upperbpm <= 20 && upperbpm <= 70 { // Test case (original value might be 10 & 50)
+		w.WriteHeader(418) // Person is sleeping
 	} else {
-		// return false
+		w.WriteHeader(200) // Person is awake
 	}
 }
-*/
+
+func findLowerHeartBeat() {
+	lower := nil
+	for _, rate := range heartRateData.ActivityHeartIntraday.HeartIntradayDatapoint {
+		if lower > rate || lower == nil {
+			lower = rate
+		}
+	}
+	return lower
+}
+
+func findUpperHeartBeat() {
+	upper := nil
+	for _, rate := range heartRateData.ActivityHeartIntraday.HeartIntradayDatapoint {
+		if upper < rate || upper == nil {
+			upper = rate
+		}
+	}
+	return upper
+}
+
 func main() {
 	params = authParams{os.Args[1], os.Args[2], os.Args[3], os.Args[4], os.Args[5], os.Args[6]}
 
 	http.HandleFunc("/", welcomeMessage)
 	http.HandleFunc("/register/", register)
 	http.HandleFunc("/success/", authOnSuccess)
-	http.HandleFunc("/subscribe/sleep/", fitbitData)
-//	http.HandleFunc("/refresh_token/", refreshToken)
-//	http.HandleFunc("/is_sleeping/", isSleeping)
+	http.HandleFunc("/is_sleeping/", isSleeping)
 
 	err := http.ListenAndServeTLS(":443", "/etc/letsencrypt/live/phewstoc.sladic.se/fullchain.pem", "/etc/letsencrypt/live/phewstoc.sladic.se/privkey.pem", nil)
 	if err != nil {
