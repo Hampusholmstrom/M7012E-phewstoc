@@ -79,7 +79,7 @@ func authOnSuccess(w http.ResponseWriter, r *http.Request) {
 	v.Add("grant_type", "authorization_code")
 	v.Add("code", keys[0])
 
-    req, err := http.NewRequest("POST", authURL, strings.NewReader(v.Encode()))
+  req, err := http.NewRequest("POST", authURL, strings.NewReader(v.Encode()))
 	if err != nil {
 		fmt.Println("authentication error while obtaining acesstoken")
 	}
@@ -101,6 +101,7 @@ func authOnSuccess(w http.ResponseWriter, r *http.Request) {
 	} else {
 		params.refresh_token = accessTokenInfo.RefreshToken
 	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func getHeartRateData() Heart {
@@ -132,9 +133,11 @@ func isSleeping(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if upperbpm - upperbpm <= 20 && upperbpm <= 70 { // Test case (original value might be 10 & 50)
-		w.WriteHeader(418) // Person is sleeping
+		//.WriteHeader(418) // Person is sleeping
+		fmt.Fprintf(w, "Person is sleeping.")
 	} else {
-		w.WriteHeader(200) // Person is awake
+		//w.WriteHeader(200) // Person is awake
+		fmt.Fprintf(w, "Person is not sleeping.")
 	}
 }
 
@@ -164,7 +167,7 @@ func main() {
 	http.HandleFunc("/", welcomeMessage)
 	http.HandleFunc("/register/", register)
 	http.HandleFunc("/success/", authOnSuccess)
-	http.HandleFunc("/is_sleeping/", isSleeping)
+	http.HandleFunc("/issleeping/", isSleeping)
 
 	err := http.ListenAndServeTLS(":443", "/etc/letsencrypt/live/phewstoc.sladic.se/fullchain.pem", "/etc/letsencrypt/live/phewstoc.sladic.se/privkey.pem", nil)
 	if err != nil {
