@@ -33,7 +33,7 @@ class KODI:
                 # TODO: Login to KODI with person["name"] and person["password"] here.
                 break
 
-    def toggle_pause(self):
+    def pause(self):
         players = self.kodi.Player.GetActivePlayers()
         for player in players["result"]:
             properties = self.kodi.Player.GetProperties(playerid=player["playerid"], properties=["speed"])
@@ -79,7 +79,7 @@ class TV:
     def _off(self):
         print("Turning off TV")
 
-        self.kodi.toggle_pause()
+        self.kodi.pause()
 
         try:
             print("Sending CEC 'standby' signal")
@@ -96,27 +96,27 @@ class TV:
                 print("Failed to run auxiliary 'off' command: %s" % e)
 
     def on(self, name="Unknown"):
-        print("Turning on TV")
-
-        self.kodi.login(name)
-        self.kodi.toggle_pause()
-
-        if self.aux_on_command != "":
-            try:
-                print("Running auxiliary 'on' command")
-                self._run_aux_command(self.aux_on_command)
-            except CalledProcessError as e:
-                print("Failed to run auxiliary 'on' command: %s" % e)
-
-        try:
-            print("Sending CEC 'on' signal")
-            self._cec_on()
-            self.is_on = True
-        except CalledProcessError as e:
-            print("Failed to turn on TV: %s" % e)
-
         # Deque old turn off TV events.
         deque(map(self.scheduler.cancel, self.scheduler.queue))
+
+        if not self.is_on:
+            print("Turning on TV")
+
+            self.kodi.login(name)
+
+            if self.aux_on_command != "":
+                try:
+                    print("Running auxiliary 'on' command")
+                    self._run_aux_command(self.aux_on_command)
+                except CalledProcessError as e:
+                    print("Failed to run auxiliary 'on' command: %s" % e)
+
+            try:
+                print("Sending CEC 'on' signal")
+                self._cec_on()
+                self.is_on = True
+            except CalledProcessError as e:
+                print("Failed to turn on TV: %s" % e)
 
         # Add new turn off TV event.
         self.scheduler.enter(self.timeout, 1, self._off)
@@ -227,7 +227,7 @@ class Recognizer:
                         [(known_face_names, known_face_encodings, e) for e in face_encodings]):
 
                     print("Found: %s" % name)
-                    if authenticated and not self.tv.is_on:
+                    if authenticated:
                         self.tv.on(name=name)
 
             print("Capture #%d doesn't exist or was unexpectedly closed" % camera_index)
