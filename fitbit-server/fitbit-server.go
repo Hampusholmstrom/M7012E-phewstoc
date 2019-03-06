@@ -117,7 +117,7 @@ func getHeartRateData() Heart {
 	if err != nil {
 		fmt.Println("some client do get req error")
 	}
-	fmt.Println(getResp.Status)
+	fmt.Println("hetHeartRateData() says: " + getResp.Status)
 	var heartRateData Heart
 	err = json.NewDecoder(getResp.Body).Decode(&heartRateData)
 	return heartRateData
@@ -195,7 +195,7 @@ func refreshToken() {
 		fmt.Println(err)
 		fmt.Println("some client Do err")
 	}
-	fmt.Println(resp.Status)
+	fmt.Println("refreshToken() says: " + resp.Status)
 	err = json.NewDecoder(resp.Body).Decode(&accessTokenInfo)
 	if err != nil {
 		fmt.Println("error:", err)
@@ -205,7 +205,7 @@ func refreshToken() {
 }
 
 func main() {
-	params = authParams{os.Args[1], os.Args[2]}
+	params = authParams{os.Args[1], os.Args[2], ""}
 
 	http.HandleFunc("/", welcomeMessage)
 	http.HandleFunc("/register/", register)
