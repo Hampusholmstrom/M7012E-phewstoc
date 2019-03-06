@@ -127,35 +127,38 @@ class TV:
             self.resume = False
             self.kodi.play(name)
 
-    def on(self, name="Unknown"):
-        with self.lock
-            # Deque old turn off TV events.
-            deque(map(self.scheduler.cancel, self.scheduler.queue))
+    def _on(self, name):
+        # Deque old turn off TV events.
+        deque(map(self.scheduler.cancel, self.scheduler.queue))
 
-            if self.is_on:
-                self._play(name)
-            else:
-                print("Turning on TV")
+        if self.is_on:
+            self._play(name)
+        else:
+            print("Turning on TV")
 
-                self.kodi.login(name)
+            self.kodi.login(name)
 
-                if self.aux_on_command != "":
-                    try:
-                        print("Running auxiliary 'on' command")
-                        self._run_aux_command(self.aux_on_command)
-                    except CalledProcessError as e:
-                        print("Failed to run auxiliary 'on' command: %s" % e)
-
+            if self.aux_on_command != "":
                 try:
-                    print("Sending CEC 'on' signal")
-                    self._cec_on()
-                    self.is_on = True
+                    print("Running auxiliary 'on' command")
+                    self._run_aux_command(self.aux_on_command)
                 except CalledProcessError as e:
-                    print("Failed to turn on TV: %s" % e)
+                    print("Failed to run auxiliary 'on' command: %s" % e)
 
-            # Add new turn off TV event.
-            self.scheduler.enter(self.off_timeout, 1, self._off)
-            self.scheduler.enter(self.pause_timeout, 1, self._pause, argument=(name, ))
+            try:
+                print("Sending CEC 'on' signal")
+                self._cec_on()
+                self.is_on = True
+            except CalledProcessError as e:
+                print("Failed to turn on TV: %s" % e)
+
+        # Add new turn off TV event.
+        self.scheduler.enter(self.off_timeout, 1, self._off)
+        self.scheduler.enter(self.pause_timeout, 1, self._pause, argument=(name, ))
+
+    def on(self, name="Unknown"):
+        with self.lock:
+            self._on(name)
 
 
 class SleepDetector(Thread):
