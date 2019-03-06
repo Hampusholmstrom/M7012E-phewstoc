@@ -12,7 +12,7 @@ import signal
 import time
 from collections import deque
 from subprocess import PIPE, CalledProcessError, run
-from threading import Thread
+from threading import Thread, Lock
 
 import cv2
 import face_recognition
@@ -66,6 +66,7 @@ class TV:
         self.off_timeout = off_timeout
         self.is_on = False
         self.resume = False
+        self.lock = Lock()
 
         self.aux_off_command = aux_off_command
         self.aux_on_command = aux_on_command
@@ -127,33 +128,34 @@ class TV:
             self.kodi.play(name)
 
     def on(self, name="Unknown"):
-        # Deque old turn off TV events.
-        deque(map(self.scheduler.cancel, self.scheduler.queue))
+        with self.lock
+            # Deque old turn off TV events.
+            deque(map(self.scheduler.cancel, self.scheduler.queue))
 
-        if self.is_on:
-            self._play(name)
-        else:
-            print("Turning on TV")
+            if self.is_on:
+                self._play(name)
+            else:
+                print("Turning on TV")
 
-            self.kodi.login(name)
+                self.kodi.login(name)
 
-            if self.aux_on_command != "":
+                if self.aux_on_command != "":
+                    try:
+                        print("Running auxiliary 'on' command")
+                        self._run_aux_command(self.aux_on_command)
+                    except CalledProcessError as e:
+                        print("Failed to run auxiliary 'on' command: %s" % e)
+
                 try:
-                    print("Running auxiliary 'on' command")
-                    self._run_aux_command(self.aux_on_command)
+                    print("Sending CEC 'on' signal")
+                    self._cec_on()
+                    self.is_on = True
                 except CalledProcessError as e:
-                    print("Failed to run auxiliary 'on' command: %s" % e)
+                    print("Failed to turn on TV: %s" % e)
 
-            try:
-                print("Sending CEC 'on' signal")
-                self._cec_on()
-                self.is_on = True
-            except CalledProcessError as e:
-                print("Failed to turn on TV: %s" % e)
-
-        # Add new turn off TV event.
-        self.scheduler.enter(self.off_timeout, 1, self._off)
-        self.scheduler.enter(self.pause_timeout, 1, self._pause, argument=(name, ))
+            # Add new turn off TV event.
+            self.scheduler.enter(self.off_timeout, 1, self._off)
+            self.scheduler.enter(self.pause_timeout, 1, self._pause, argument=(name, ))
 
 
 class SleepDetector(Thread):
