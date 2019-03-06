@@ -3,6 +3,7 @@
 import argparse
 import atexit
 import hashlib
+import requests
 import json
 import multiprocessing as mp
 import pathlib
@@ -155,12 +156,30 @@ class TV:
         self.scheduler.enter(self.pause_timeout, 1, self._pause, argument=(name, ))
 
 
-class Recognizer:
+class SleepDetector(Thread):
+    def __init__(self, tv):
+        self.tv = tv
+        Thread.__init__(self)
+
+    def _check_sleeping(self):
+        r = requests.get("https://phewstoc.sladic.se/issleeping/")
+        if r.status_code != 418:
+            self.tv.on(name=name)
+
+    def run(self):
+        while True:
+            self._check_sleeping()
+            sleep(60*5)  # 5 minutes.
+
+
+class FaceRecognizer(Thread):
     def __init__(self, people, camera_index, cores, tv):
         self.people = people
         self.camera_index = camera_index
         self.cores = cores
         self.tv = tv
+
+        Thread.__init__(self)
 
     @staticmethod
     def _encode_face(path):
@@ -226,7 +245,7 @@ class Recognizer:
 
         try:
             # Spawn one thread for each face encoder.
-            encode_thread = thread_pool.map_async(Recognizer._encode_face, [(p["image"]) for p in people])
+            encode_thread = thread_pool.map_async(FaceRecognizer._encode_face, [(p["image"]) for p in people])
 
             # While encoding the faces, open the video capture (webcam).
             video_capture = cv2.VideoCapture(camera_index)
@@ -255,7 +274,7 @@ class Recognizer:
                 face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
 
                 # Compare faces and display the results.
-                for name, authenticated in thread_pool.starmap(Recognizer._compare_face,
+                for name, authenticated in thread_pool.starmap(FaceRecognizer._compare_face,
                                                                [(known_face_names, known_face_encodings, e)
                                                                 for e in face_encodings]):
 
@@ -315,6 +334,7 @@ def main():
         print("People data file: '%s' does not exit" % args.people)
         return
 
+    # Create TV that is running KODI.
     kodi = KODI(people, args.address)
     tv = TV(
         args.tv,
@@ -323,7 +343,18 @@ def main():
         off_timeout=args.off_timeout,
         aux_on_command=args.aux_on_cmd,
         aux_off_command=args.aux_off_cmd)
-    Recognizer(people, args.camera, args.cores, tv).run()
+
+    # Initialize feeders that will send detection events to the TV.
+    sleep_detector = SleepDetector(people, tv)
+    face_recognizer = FaceRecognizer(people, args.camera, args.cores, tv)
+
+    # Start the feeders.
+    sleep_detector.start()
+    face_recognizer.start()
+
+    # Wait for the threads to finish (which would probably be due to e.g. an keyboard interrupt)
+    sleep_detector.join()
+    face_recognizer.join()
 
 
 if __name__ == "__main__":
