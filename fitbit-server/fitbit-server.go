@@ -17,9 +17,6 @@ var params authParams
 type authParams struct {
 	client_id     string
 	client_secret string
-	response_type string
-	scope         string
-	redirect_uri  string
 	refresh_token string
 }
 
@@ -208,7 +205,7 @@ func refreshToken() {
 }
 
 func main() {
-	params = authParams{os.Args[1], os.Args[2], os.Args[3], os.Args[4], os.Args[5], os.Args[6]}
+	params = authParams{os.Args[1], os.Args[2]}
 
 	http.HandleFunc("/", welcomeMessage)
 	http.HandleFunc("/register/", register)
