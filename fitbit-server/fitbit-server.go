@@ -17,7 +17,6 @@ var params authParams
 type authParams struct {
 	client_id     string
 	client_secret string
-	refresh_token string
 }
 
 var accessTokenInfo ResponseInfo
@@ -27,6 +26,21 @@ type ResponseInfo struct {
 	RefreshToken string `json:"refresh_token"`
 	TokenType    string `json:"token_type"`
 	UserId       string `json:"user_id"`
+}
+
+type Heart struct {
+	ActivitiesHeartIntraday ActivityHeartIntraday	`json:"activities-heart-intraday"`
+}
+
+type ActivityHeartIntraday struct {
+	Dataset  []HeartIntradayDatapoint `json:"dataset"`
+	Interval int                      `json:"datasetInterval"`
+	Type     string                   `json:"datasetType"`
+}
+
+type HeartIntradayDatapoint struct {
+	Time      string    `json:"time"`
+	HeartRate int `json:"value"`
 }
 
 func welcomeMessage(w http.ResponseWriter, r *http.Request) {
@@ -44,25 +58,6 @@ func concAuth(clientId string, clientSecret string) string {
 	return b64.StdEncoding.EncodeToString([]byte(idAndSecret))
 }
 
-//type HeartRate int64
-type Calorie float64
-
-type Heart struct {
-	ActivitiesHeartIntraday ActivityHeartIntraday	`json:"activities-heart-intraday"`
-}
-
-type ActivityHeartIntraday struct {
-	Dataset  []HeartIntradayDatapoint `json:"dataset"`
-	Interval int                      `json:"datasetInterval"`
-	Type     string                   `json:"datasetType"`
-}
-
-type HeartIntradayDatapoint struct {
-	Time      string    `json:"time"`
-	HeartRate int `json:"value"`
-}
-
-
 func authOnSuccess(w http.ResponseWriter, r *http.Request) {
 	authURL := "https://api.fitbit.com/oauth2/token"
 
@@ -72,7 +67,6 @@ func authOnSuccess(w http.ResponseWriter, r *http.Request) {
 	}
 
 	client := &http.Client{}
-
 	v := url.Values{}
 	v.Add("client_id", params.client_id)
 	v.Add("grant_type", "authorization_code")
@@ -92,16 +86,14 @@ func authOnSuccess(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("some client Do err")
 	}
 
-	fmt.Println(resp.Status)
+	fmt.Println("authOnSuccess() says: " + resp.Status)
 
 	err = json.NewDecoder(resp.Body).Decode(&accessTokenInfo)
 	if err != nil {
 		fmt.Println("error:", err)
 	} else {
-		params.refresh_token = accessTokenInfo.RefreshToken
+		fmt.Fprintf(w, "successfully registered!")
 	}
-	//w.WriteHeader(http.StatusNoContent)
-	fmt.Fprintf(w, "successfully registered!")
 }
 
 func getHeartRateData() Heart {
@@ -128,7 +120,6 @@ func getActualTime() string {
 	t := time.Now().Add(time.Duration(-17) * time.Minute).In(loc).Format("15:04")
 	fmt.Println("Getting time from: " + t)
 	return t
-	//fmt.Println(time.Now().In(loc).Format("15:04"))
 }
 
 func getTime() string {
@@ -136,7 +127,6 @@ func getTime() string {
 	t := time.Now().Add(time.Duration(-18) * time.Minute).In(loc).Format("15:04")
 	fmt.Println("Getting time to: " + t)
 	return t
-	//fmt.Println(time.Now().Add(time.Duration(-1) * time.Minute).In(loc).Format("15:04"))
 }
 
 func isSleeping(w http.ResponseWriter, r *http.Request) {
@@ -150,10 +140,8 @@ func isSleeping(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "CRUCIAL: WE HAVE NO DATA!")
 	} else if  upperbpm - upperbpm <= 20 && upperbpm <= 70 { // Test case (original value might be 10 & 50)
 		w.WriteHeader(418) // Person is sleeping
-		//fmt.Fprintf(w, "Person is sleeping.")
 	} else {
 		w.WriteHeader(200) // Person is awake
-		//fmt.Fprintf(w, "Person is not sleeping.")
 	}
 }
 
@@ -183,7 +171,7 @@ func refreshToken() {
 	client := &http.Client{}
 	v := url.Values{}
 	v.Add("grant_type", "authorization_code")
-	v.Add("refresh_token", params.refresh_token)
+	v.Add("refresh_token", accessTokenInfo.RefreshToken)
 	req, err := http.NewRequest("POST", "https://api.fitbit.com/oauth2/token", strings.NewReader(v.Encode()))
 	if err != nil {
 		fmt.Println("Unable to create request.")
@@ -199,13 +187,11 @@ func refreshToken() {
 	err = json.NewDecoder(resp.Body).Decode(&accessTokenInfo)
 	if err != nil {
 		fmt.Println("error:", err)
-	} else {
-		params.refresh_token = accessTokenInfo.RefreshToken
 	}
 }
 
 func main() {
-	params = authParams{os.Args[1], os.Args[2], ""}
+	params = authParams{os.Args[1], os.Args[2]}
 
 	http.HandleFunc("/", welcomeMessage)
 	http.HandleFunc("/register/", register)
