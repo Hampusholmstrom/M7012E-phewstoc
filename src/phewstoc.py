@@ -164,7 +164,7 @@ class SleepDetector(Thread):
     def _check_sleeping(self):
         r = requests.get("https://phewstoc.sladic.se/issleeping/")
         if r.status_code != 418:
-            self.tv.on(name=name)
+            self.tv.on(name="Philip")
 
     def run(self):
         while True:
