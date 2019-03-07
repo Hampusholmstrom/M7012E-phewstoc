@@ -3,7 +3,6 @@
 import argparse
 import atexit
 import hashlib
-import requests
 import json
 import multiprocessing as mp
 import pathlib
@@ -12,11 +11,12 @@ import signal
 import time
 from collections import deque
 from subprocess import PIPE, CalledProcessError, run
-from threading import Thread, Lock
+from threading import Lock, Thread
 
 import cv2
 import face_recognition
 import numpy as np
+import requests
 from kodipydent import Kodi
 
 PAUSE_TIMEOUT_SECONDS = 300
@@ -162,26 +162,36 @@ class TV:
 
 
 class SleepDetector(Thread):
-    def __init__(self, tv):
-        self.tv = tv
+    def __init__(self):
+        self.sleeping = False
+        self.lock = Lock()
         Thread.__init__(self)
 
-    def _check_sleeping(self):
-        r = requests.get("https://phewstoc.sladic.se/issleeping/")
-        if r.status_code != 418:
-            self.tv.on(name="Philip")
+    def set_sleeping(self, state):
+        with self.lock:
+            self.sleeping = state
 
-    def run(self):
+    def _check_sleeping(self, name):
+        r = requests.get("https://phewstoc.sladic.se/issleeping/")
+        if r.status_code == 418:
+            print("%s is asleep" % name)
+            self.set_sleeping(True)
+        else:
+            print("%s is awake (%d)" % (name, r.status_code))
+            self.set_sleeping(False)
+
+    def run(self, name="Philip"):
         while True:
-            self._check_sleeping()
-            sleep(60*5)  # 5 minutes.
+            self._check_sleeping(name)
+            time.sleep(1 * 60)  # 1 minutes.
 
 
 class FaceRecognizer(Thread):
-    def __init__(self, people, camera_index, cores, tv):
+    def __init__(self, people, camera_index, cores, sleep_detector, tv):
         self.people = people
         self.camera_index = camera_index
         self.cores = cores
+        self.sleep_detector = sleep_detector
         self.tv = tv
 
         Thread.__init__(self)
@@ -284,7 +294,7 @@ class FaceRecognizer(Thread):
                                                                 for e in face_encodings]):
 
                     print("Found: %s" % name)
-                    if authenticated:
+                    if authenticated and not self.sleep_detector.sleeping:
                         self.tv.on(name=name)
 
             print("Capture #%d doesn't exist or was unexpectedly closed" % camera_index)
@@ -350,8 +360,8 @@ def main():
         aux_off_command=args.aux_off_cmd)
 
     # Initialize feeders that will send detection events to the TV.
-    sleep_detector = SleepDetector(people, tv)
-    face_recognizer = FaceRecognizer(people, args.camera, args.cores, tv)
+    sleep_detector = SleepDetector()
+    face_recognizer = FaceRecognizer(people, args.camera, args.cores, sleep_detector, tv)
 
     # Start the feeders.
     sleep_detector.start()
