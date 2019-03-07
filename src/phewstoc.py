@@ -10,13 +10,15 @@ import sched
 import signal
 import time
 from collections import deque
+from random import randint
 from subprocess import PIPE, CalledProcessError, run
 from threading import Lock, Thread
+
+import requests
 
 import cv2
 import face_recognition
 import numpy as np
-import requests
 from kodipydent import Kodi
 
 PAUSE_TIMEOUT_SECONDS = 300
@@ -28,27 +30,49 @@ class KODI:
         self.people = people
         self.kodi = Kodi(address)
 
+    def _pauseQuestion(self, name):
+        questions = ["Are you there %s?", "Show me your face %s!", "Where are you, %s?"]
+        return questions[randint(0, len(questions) - 1)] % name
+
+    def _welcomeMessage(self, name):
+        message = ["Hello there, %s!", "Hi, you look beautiful %s.", "Back from eating, %s?"]
+        return message[randint(0, len(message) - 1)] % name
+
     def login(self, name):
         for person in self.people:
             if person["name"] == name:
-                self.kodi.GUI.ShowNotification(title="Welcome", message=name)
+                self.kodi.GUI.ShowNotification(title="Welcome", message=self._welcomeMessage(name))
                 # TODO: Login to KODI with person["name"] and person["password"] here.
                 break
 
     def pause(self, name):
-        self.kodi.GUI.ShowNotification(title="Are you there?", message="Show your face %s" % name)
+        self.kodi.GUI.ShowNotification(title="Pause", message=self._pauseQuestion(name))
+
         players = self.kodi.Player.GetActivePlayers()
         for player in players["result"]:
-            properties = self.kodi.Player.GetProperties(playerid=player["playerid"], properties=["speed"])
-            if properties["result"]["speed"] > 0:
+            properties = self.kodi.Player.GetProperties(
+                playerid=player["playerid"], properties=["speed", "type", "currentvideostream"])["result"]
+
+            speed = properties["speed"]
+            mtype = properties["type"]
+            vstream = properties["currentvideostream"]
+
+            if speed > 0 and mtype == "video" and (vstream is not None and vstream["codec"] != "mjpeg"):
                 self.kodi.Player.PlayPause(player["playerid"])
 
     def play(self, name):
-        self.kodi.GUI.ShowNotification(title="Ah, there you are!", message="Nice face, you look beautiful %s" % name)
+        self.kodi.GUI.ShowNotification(title="Ah, there you are!", message=self._welcomeMessage(name))
+
         players = self.kodi.Player.GetActivePlayers()
         for player in players["result"]:
-            properties = self.kodi.Player.GetProperties(playerid=player["playerid"], properties=["speed"])
-            if properties["result"]["speed"] <= 0:
+            properties = self.kodi.Player.GetProperties(
+                playerid=player["playerid"], properties=["speed", "type", "currentvideostream"])["result"]
+
+            speed = properties["speed"]
+            mtype = properties["type"]
+            vstream = properties["currentvideostream"]
+
+            if speed <= 0 and mtype == "video" and (vstream is not None and vstream["codec"] != "mjpeg"):
                 self.kodi.Player.PlayPause(player["playerid"])
 
 
