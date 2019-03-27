@@ -83,6 +83,23 @@ body{
   font-family: Palatino Linotype;
 }
 
+#links{
+  text-align: center;
+  margin-top: 150px;
+  font-family: Palatino Linotype;
+}
+
+#links li {
+	text-align: center;
+	list-style: none;
+	margin-top: 10px;
+	display: block;
+	font-family: Palatino Linotype;
+  float: under;
+	font-size:15px;
+
+}
+
 #footer{
   width: auto;
   height: 100px;
